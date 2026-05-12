@@ -1,11 +1,12 @@
 "use strict";
 
-const { Menu, Notice, Plugin, TFile } = require("obsidian");
+const { Menu, Notice, Plugin, PluginSettingTab, Setting, TFile } = require("obsidian");
 
 const MAX_RECENT_TAGS = 100;
 const MAX_SUGGESTIONS = 40;
 const TAGS_PER_PAGE = 5;
 const DEFAULT_DATA = {
+	allowMultipleTags: true,
 	recentTags: []
 };
 const MENU_SECTION = "file-tag-picker";
@@ -19,6 +20,11 @@ class FileTagPickerPlugin extends Plugin {
 		if (!Array.isArray(this.data.recentTags)) {
 			this.data.recentTags = [];
 		}
+		if (typeof this.data.allowMultipleTags !== "boolean") {
+			this.data.allowMultipleTags = DEFAULT_DATA.allowMultipleTags;
+		}
+
+		this.addSettingTab(new FileTagPickerSettingTab(this.app, this));
 
 		this.registerEvent(
 			this.app.workspace.on("file-menu", (menu, file) => {
@@ -192,6 +198,11 @@ class FileTagPickerPlugin extends Plugin {
 			return;
 		}
 
+		if (!this.data.allowMultipleTags) {
+			await this.setSingleTagForFiles(files, normalizedTag);
+			return;
+		}
+
 		for (const file of files) {
 			const currentTags = this.getCurrentTags(file);
 			const nextTags = new Set(currentTags);
@@ -209,6 +220,19 @@ class FileTagPickerPlugin extends Plugin {
 			files.length === 1
 				? `${actionText} #${normalizedTag}.`
 				: `${actionText} #${normalizedTag} in ${files.length} files.`
+		);
+	}
+
+	async setSingleTagForFiles(files, tag) {
+		for (const file of files) {
+			await this.setFileTags(file, [tag]);
+		}
+
+		await this.recordRecentTags([tag]);
+		new Notice(
+			files.length === 1
+				? `Set tag to #${tag}.`
+				: `Set tag to #${tag} in ${files.length} files.`
 		);
 	}
 
@@ -358,6 +382,30 @@ class FileTagPickerPlugin extends Plugin {
 		const merged = [...normalized, ...this.data.recentTags.filter((tag) => !seen.has(tag))];
 		this.data.recentTags = merged.slice(0, MAX_RECENT_TAGS);
 		await this.saveData(this.data);
+	}
+}
+
+class FileTagPickerSettingTab extends PluginSettingTab {
+	constructor(app, plugin) {
+		super(app, plugin);
+		this.plugin = plugin;
+	}
+
+	display() {
+		const { containerEl } = this;
+		containerEl.empty();
+
+		new Setting(containerEl)
+			.setName("Allow multiple tags")
+			.setDesc("When off, choosing a tag from the file menu replaces the file's existing tags.")
+			.addToggle((toggle) => {
+				toggle
+					.setValue(this.plugin.data.allowMultipleTags)
+					.onChange(async (value) => {
+						this.plugin.data.allowMultipleTags = value;
+						await this.plugin.saveData(this.plugin.data);
+					});
+			});
 	}
 }
 
