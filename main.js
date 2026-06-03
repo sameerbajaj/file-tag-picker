@@ -1,6 +1,6 @@
 "use strict";
 
-const { Menu, Notice, Plugin, PluginSettingTab, Setting, TFile } = require("obsidian");
+const { MarkdownView, Menu, Notice, Plugin, PluginSettingTab, Setting, TFile } = require("obsidian");
 
 const MAX_RECENT_TAGS = 100;
 const MAX_SUGGESTIONS = 40;
@@ -25,6 +25,23 @@ class FileTagPickerPlugin extends Plugin {
 		}
 
 		this.addSettingTab(new FileTagPickerSettingTab(this.app, this));
+		this.registerRecentTagCommands();
+
+		this.addCommand({
+			id: "open-tag-picker",
+			name: "Open tag picker",
+			checkCallback: (checking) => {
+				const activeFile = this.app.workspace.getActiveFile();
+				const isMarkdown = activeFile instanceof TFile && activeFile.extension === "md";
+				if (checking) {
+					return isMarkdown;
+				}
+				if (isMarkdown) {
+					this.tagPageIndex = 0;
+					this.openStandaloneTagMenu([activeFile]);
+				}
+			}
+		});
 
 		this.registerEvent(
 			this.app.workspace.on("file-menu", (menu, file) => {
@@ -40,6 +57,36 @@ class FileTagPickerPlugin extends Plugin {
 				this.addTagMenu(menu, this.getMarkdownFiles(files), { standaloneMenu: false });
 			})
 		);
+	}
+
+	registerRecentTagCommands() {
+		for (let i = 0; i < 2; i++) {
+			try {
+				this.app.commands.removeCommand(`file-tag-picker:toggle-recent-${i}`);
+			} catch (e) {
+				// Ignore
+			}
+		}
+
+		const recentTags = this.data.recentTags.slice(0, 2);
+		recentTags.forEach((tag, index) => {
+			this.addCommand({
+				id: `toggle-recent-${index}`,
+				name: `Toggle tag: #${tag}`,
+				checkCallback: (checking) => {
+					const activeFile = this.app.workspace.getActiveFile();
+					const isMarkdown = activeFile instanceof TFile && activeFile.extension === "md";
+					if (checking) {
+						return isMarkdown;
+					}
+					if (isMarkdown) {
+						const currentTags = this.getCurrentTags(activeFile);
+						const hasTag = currentTags.includes(tag);
+						void this.toggleTagForFiles([activeFile], tag, hasTag);
+					}
+				}
+			});
+		});
 	}
 
 	addTagMenu(menu, files, options) {
@@ -166,7 +213,40 @@ class FileTagPickerPlugin extends Plugin {
 			return;
 		}
 
-		new Notice("Right-click again to browse more tags.");
+		const currentDoc = typeof activeDocument !== "undefined" ? activeDocument : document;
+		const currentWin = typeof activeWindow !== "undefined" ? activeWindow : window;
+
+		const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+		if (activeView && activeView.editor) {
+			activeView.editor.focus();
+		}
+
+		currentWin.setTimeout(() => {
+			let position = null;
+			if (activeView && activeView.editor) {
+				const editor = activeView.editor;
+				if (editor.cm && typeof editor.cm.coordsAtPos === "function") {
+					try {
+						const offset = editor.posToOffset(editor.getCursor());
+						const coords = editor.cm.coordsAtPos(offset);
+						if (coords) {
+							position = { x: coords.left, y: coords.bottom };
+						}
+					} catch (e) {
+						// Ignore coordinate errors
+					}
+				}
+			}
+
+			if (!position) {
+				position = {
+					x: currentWin.innerWidth / 2,
+					y: currentWin.innerHeight / 3
+				};
+			}
+
+			menu.showAtPosition(position, currentDoc);
+		}, 100);
 	}
 
 	getMarkdownFiles(files) {
@@ -382,6 +462,7 @@ class FileTagPickerPlugin extends Plugin {
 		const merged = [...normalized, ...this.data.recentTags.filter((tag) => !seen.has(tag))];
 		this.data.recentTags = merged.slice(0, MAX_RECENT_TAGS);
 		await this.saveData(this.data);
+		this.registerRecentTagCommands();
 	}
 }
 
