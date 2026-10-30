@@ -1,0 +1,12 @@
+{
+  "name": "obsidian-file-tag-picker",
+  "version": "1.3.0",
+  "description": "Manage note tags in the file explorer context menu with recent-first paging and multi-file support.",
+  "homepage": "https://sameerbajaj.com",
+  "author": "Sameer Bajaj (https://sameerbajaj.com)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sameerbajaj/file-tag-picker.git"
+  }
+}

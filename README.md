@@ -39,3 +39,7 @@ The plugin updates YAML frontmatter `tags` in each selected Markdown file by usi
 ## License
 
 MIT
+
+---
+
+Part of the open-source tools collection by [Sameer Bajaj](https://sameerbajaj.com).
